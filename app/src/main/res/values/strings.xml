@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">ai37</string>
+    <string name="title_activity_profile">ProfileActivity</string>
+    <string name="title_activity_dashboard">DashboardActivity</string>
+    <string name="title_activity_login">LoginActivity</string>
+    <string name="title_activity_registration">RegistrationActivity</string>
+    <string name="title_activity_profilee">ProfileeActivity</string>
+    <string name="title_activity_settings">SettingsActivity</string>
+    <string name="title_activity_map">MapActivity</string>
+</resources>
