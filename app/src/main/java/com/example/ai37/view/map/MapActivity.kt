@@ -30,6 +30,7 @@ import org.maplibre.android.maps.MapLibreMap
 
 // FIX: Add necessary imports for KeyboardOptions and KeyboardType
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.sp
 
 // Global reference for MapView lifecycle integration
 private var mapViewState: MapView? = null
@@ -165,8 +166,8 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text("Choose Location:", style = MaterialTheme.typography.titleMedium)
-                    Text("• Type latitude/longitude and press the button", style = MaterialTheme.typography.bodySmall)
-                    Text("• OR tap anywhere on the map", style = MaterialTheme.typography.bodySmall)
+                    Text("• Type latitude/longitude and press the button", style = MaterialTheme.typography.bodySmall, fontSize = 16.sp)
+                    Text("• OR tap anywhere on the map", style = MaterialTheme.typography.bodySmall, fontSize = 16.sp)
                     Spacer(Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
