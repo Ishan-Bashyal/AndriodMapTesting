@@ -193,27 +193,54 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
                         )
                     }
                     Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = {
-                            try {
-                                val lat = inputLatText.toDouble()
-                                val lon = inputLonText.toDouble()
-                                val newPosition = LatLng(lat, lon)
-
-                                mapInstance?.animateCamera(
-                                    org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(newPosition, 12.0)
-                                )
-                                markerInstance?.position = newPosition
-                                currentLat = lat
-                                currentLon = lon
-                            } catch (e: NumberFormatException) {
-                                Toast.makeText(context, "Invalid coordinates. Please enter numbers.", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("Center Map on Input Location")
+                        Button(
+                            onClick = {
+                                try {
+                                    val lat = inputLatText.toDouble()
+                                    val lon = inputLonText.toDouble()
+                                    val newPosition = LatLng(lat, lon)
+
+                                    mapInstance?.animateCamera(
+                                        org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(newPosition, 12.0)
+                                    )
+                                    markerInstance?.position = newPosition
+                                    currentLat = lat
+                                    currentLon = lon
+                                } catch (e: NumberFormatException) {
+                                    Toast.makeText(context, "Invalid coordinates. Please enter numbers.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Center Map")
+                        }
+
+                        Button(
+                            onClick = {
+                                Toast.makeText(
+                                    context,
+                                    "Location Confirmed:\nLat: $currentLat\nLon: $currentLon",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+
+                                // TODO: NAVIGATE BACK OR SEND RESULT
+                                // Example: (if using Activity)
+                                // val result = Intent()
+                                // result.putExtra("lat", currentLat)
+                                // result.putExtra("lon", currentLon)
+                                // (context as Activity).setResult(Activity.RESULT_OK, result)
+                                // (context as Activity).finish()
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Confirm")
+                        }
                     }
+
                 }
             }
 
@@ -238,7 +265,7 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text("2. Selected Location (Click/Drag Marker):", style = MaterialTheme.typography.titleMedium)
+                    Text("Selected Location (Click/Drag Marker):", style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = "Lat: ${String.format("%.6f", currentLat)}, Lon: ${String.format("%.6f", currentLon)}",
                         style = MaterialTheme.typography.headlineSmall,
