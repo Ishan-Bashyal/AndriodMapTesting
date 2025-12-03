@@ -4,118 +4,136 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-// Correctly import LocalLifecycleOwner and LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalContext
-import android.util.Log // For optional debugging
-
-// Correct imports for MapLibre
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import android.widget.Toast
+import androidx.compose.foundation.text.KeyboardOptions
+import com.example.ai37.util.Constants
 import org.maplibre.android.MapLibre
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.annotations.Marker
 import org.maplibre.android.annotations.MarkerOptions
+// FIX: Changed MapboxMap to MapLibreMap for correct class reference
+import org.maplibre.android.maps.MapLibreMap
 
-// Import the API Key constant
-import com.example.ai37.util.Constants
+// FIX: Add necessary imports for KeyboardOptions and KeyboardType
+import androidx.compose.ui.text.input.KeyboardType
 
-// This property holds the MapView instance created in Compose, allowing the Activity
-// to call onSaveInstanceState/onLowMemory on it for proper lifecycle bridging.
+// Global reference for MapView lifecycle integration
 private var mapViewState: MapView? = null
 
 class MapActivity : ComponentActivity() {
-
-    // IMPORTANT: MapLibre initialization MUST happen before setContent
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Initializes the MapLibre SDK. This is the correct call signature.
         MapLibre.getInstance(applicationContext)
 
         setContent {
-            // Pass the Activity's savedInstanceState bundle to the Composable
             MapViewComposable(savedInstanceState = savedInstanceState)
         }
     }
 
-    // CRITICAL: Override Activity lifecycle methods to pass calls to the MapView instance (mapViewState)
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        // Delegate state saving to the actual MapView instance
         mapViewState?.onSaveInstanceState(outState)
     }
 
     override fun onLowMemory() {
         super.onLowMemory()
-        // Delegate low memory warning to the actual MapView instance
         mapViewState?.onLowMemory()
     }
-
-    // The MapView lifecycle (onStart, onResume, etc.) is handled correctly inside MapViewComposable's DisposableEffect.
 }
 
 @Composable
 fun MapViewComposable(savedInstanceState: Bundle?) {
-    // FIX: Using the constant defined in Constants.kt instead of the placeholder
-    val styleUrl = "https://api.baato.io/api/v1/styles/breeze_cdn?key=${Constants.BAATO_API_KEY}"
-
-    // 1. Get the current lifecycle owner for event observation
-    val lifecycleOwner = LocalLifecycleOwner.current
-    // 2. Get the current context for MapView instantiation (using LocalContext is safer)
+    // Initial Kathmandu coordinates
+    val initialLat = 27.7172
+    val initialLon = 85.3240
     val context = LocalContext.current
 
-    // 3. Remember the MapView instance, creating it using LocalContext.
+    // State for the currently selected/displayed coordinates (Requirement 2 output)
+    var currentLat by remember { mutableStateOf(initialLat) }
+    var currentLon by remember { mutableStateOf(initialLon) }
+
+    // State for user input fields (Requirement 1 input)
+    var inputLatText by remember { mutableStateOf(initialLat.toString()) }
+    var inputLonText by remember { mutableStateOf(initialLon.toString()) }
+
+    // Map style URL using the API key constant
+    val styleUrl = remember {
+        "https://api.baato.io/api/v1/styles/breeze_cdn?key=${Constants.BAATO_API_KEY}"
+    }
+
     val mapView = remember {
         MapView(context).apply {
-            // MapView's onCreate needs to be called with the Activity's savedInstanceState
             onCreate(savedInstanceState)
         }
     }
 
-    // 4. Use the remembered MapView in the AndroidView composable
-    AndroidView(
-        factory = { mapView },
-        update = {
-            // Update logic here if needed (e.g., if props change)
+    // FIX: Changed MapboxMap to MapLibreMap
+    var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
+    var markerInstance by remember { mutableStateOf<Marker?>(null) }
+
+
+    // Map setup and listeners (runs once after map is ready)
+    DisposableEffect(mapView) {
+        mapView.getMapAsync { map ->
+            mapInstance = map
+            map.setStyle(styleUrl) {
+
+                // Initial position
+                val initialPosition = LatLng(initialLat, initialLon)
+
+                // Center map
+                map.cameraPosition = CameraPosition.Builder()
+                    .target(initialPosition)
+                    .zoom(12.0)
+                    .build()
+
+                // Add marker once
+                val markerOptions = MarkerOptions()
+                    .position(initialPosition)
+                    .title("Selected Location")
+
+                markerInstance = map.addMarker(markerOptions)
+
+                // --- USER TAPS TO SELECT LOCATION ---
+                map.addOnMapClickListener { point ->
+                    // Move marker
+                    markerInstance?.position = point
+
+                    // Update state
+                    currentLat = point.latitude
+                    currentLon = point.longitude
+                    inputLatText = point.latitude.toString()
+                    inputLonText = point.longitude.toString()
+
+                    true
+                }
+            }
+
         }
-    )
-
-    // 5. Set up the map style and markers
-    mapView.getMapAsync { map ->
-        map.setStyle(styleUrl) {
-            val kathmanduCenter = LatLng(27.7172, 85.3240)
-
-            val position = CameraPosition.Builder()
-                .target(kathmanduCenter)
-                .zoom(10.0)
-                .build()
-
-            map.cameraPosition = position
-
-            map.addMarker(
-                MarkerOptions()
-                    .position(kathmanduCenter)
-                    .title("Kathmandu")
-            )
-        }
+        onDispose { /* Cleanup not strictly needed here */ }
     }
 
-    // 6. Manage MapView lifecycle integration with Compose via DisposableEffect
+    // Lifecycle observer for MapView
+    val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, mapView) {
-        // Set the global reference when the MapView is active in the composition
         mapViewState = mapView
-
         val lifecycleObserver = LifecycleEventObserver { _, event ->
             when (event) {
-                // Manually forward lifecycle events to the MapView instance
                 Lifecycle.Event.ON_START -> mapView.onStart()
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
@@ -124,17 +142,110 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
                 else -> {}
             }
         }
-
-        // Add the observer to the lifecycle
         lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
-
-        // Clean up when the composable leaves the composition
         onDispose {
-            // Clear the global reference
             mapViewState = null
             lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
-            // Ensure MapView is properly destroyed when the composable is removed
             mapView.onDestroy()
+        }
+    }
+
+    Scaffold { paddingValues -> // TopAppBar has been removed as requested.
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            // --- UI Controls for Location Input (Requirement 1) ---
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text("Choose Location:", style = MaterialTheme.typography.titleMedium)
+                    Text("• Type latitude/longitude and press the button", style = MaterialTheme.typography.bodySmall)
+                    Text("• OR tap anywhere on the map", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = inputLatText,
+                            onValueChange = { inputLatText = it },
+                            label = { Text("Latitude") },
+                            // FIX: Changed KeyboardType.NumberDecimal to the correct KeyboardType.Decimal
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1f).padding(end = 4.dp),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = inputLonText,
+                            onValueChange = { inputLonText = it },
+                            label = { Text("Longitude") },
+                            // FIX: Changed KeyboardType.NumberDecimal to the correct KeyboardType.Decimal
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(1f).padding(start = 4.dp),
+                            singleLine = true
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            try {
+                                val lat = inputLatText.toDouble()
+                                val lon = inputLonText.toDouble()
+                                val newPosition = LatLng(lat, lon)
+
+                                mapInstance?.animateCamera(
+                                    org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(newPosition, 12.0)
+                                )
+                                markerInstance?.position = newPosition
+                                currentLat = lat
+                                currentLon = lon
+                            } catch (e: NumberFormatException) {
+                                Toast.makeText(context, "Invalid coordinates. Please enter numbers.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Center Map on Input Location")
+                    }
+                }
+            }
+
+            // --- Map View (Takes up remaining space) ---
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f) // Fills available space
+            ) {
+                AndroidView(
+                    factory = { mapView },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            // --- Current Location Display (Requirement 2 Output) ---
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text("2. Selected Location (Click/Drag Marker):", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "Lat: ${String.format("%.6f", currentLat)}, Lon: ${String.format("%.6f", currentLon)}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -142,6 +253,6 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
 @Preview(showBackground = true)
 @Composable
 fun MapPreview() {
-    // Note: The preview will likely not render the map correctly without a real device/emulator
+    // Note: The preview will likely not render the map correctly
     MapViewComposable(savedInstanceState = null)
 }
