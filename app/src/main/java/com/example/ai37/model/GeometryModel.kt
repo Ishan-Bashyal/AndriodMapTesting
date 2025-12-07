@@ -4,7 +4,7 @@ import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
-data class Geometry(
+data class GeometryModel(
     val type: String,
     val coordinates: Double?
 ) : Parcelable

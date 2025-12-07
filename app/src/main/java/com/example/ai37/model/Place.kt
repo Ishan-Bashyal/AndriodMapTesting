@@ -7,11 +7,11 @@ data class Place(
     val license: String?,
     val score: Double?,
     var address: String,
-    var centroid: LatLon,
+    var centroid: LatLonModel,
     val placeId: Int,
     val osmId: Long,
     var name: String,
-    val geometry: Geometry?,
+    val geometryModel: GeometryModel?,
     var type: String?,
     var tags: List<String>?
 ) : Parcelable

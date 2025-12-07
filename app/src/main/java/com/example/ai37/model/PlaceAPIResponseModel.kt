@@ -1,6 +1,6 @@
 package com.example.ai37.model
 
-data class PlaceAPIResponse(
+data class PlaceAPIResponseModel(
     val timestamp: String,
     val status: Int,
     val message: String,

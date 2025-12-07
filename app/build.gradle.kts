@@ -84,4 +84,7 @@ dependencies {
 
     // MapLibre for map rendering
     implementation("org.maplibre.gl:android-sdk:11.12.1")
+
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+
 }
