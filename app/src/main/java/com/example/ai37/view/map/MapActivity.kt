@@ -5,7 +5,9 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
@@ -13,6 +15,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.input.KeyboardType
@@ -22,10 +26,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.ai37.model.SearchResult
+import com.example.ai37.ui.theme.*
 import com.example.ai37.util.Constants
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -36,9 +39,6 @@ import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-
 
 // Global MapView reference
 private var mapViewState: MapView? = null
@@ -74,16 +74,14 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
     var currentLat by remember { mutableStateOf(27.7172) }
     var currentLon by remember { mutableStateOf(85.3240) }
 
-    // Input fields
     var inputLatText by remember { mutableStateOf(currentLat.toString()) }
     var inputLonText by remember { mutableStateOf(currentLon.toString()) }
 
-    // Search states
     var searchQuery by remember { mutableStateOf("") }
     var suggestions by remember { mutableStateOf(listOf<SearchResult>()) }
     var expanded by remember { mutableStateOf(false) }
 
-    val styleUrl = remember { "https://api.baato.io/api/v1/styles/breeze_cdn?key=${Constants.BAATO_API_KEY}" }
+    val styleUrl = "https://api.baato.io/api/v1/styles/breeze_cdn?key=${Constants.BAATO_API_KEY}"
 
     val mapView = remember {
         MapView(context).apply { onCreate(savedInstanceState) }
@@ -99,10 +97,11 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
         mapView.getMapAsync { map ->
             mapInstance = map
             map.setStyle(styleUrl) {
-                val initialPosition = LatLng(currentLat, currentLon)
-                map.cameraPosition = CameraPosition.Builder().target(initialPosition).zoom(12.0).build()
-                val markerOptions = MarkerOptions().position(initialPosition).title("Selected Location")
-                markerInstance = map.addMarker(markerOptions)
+                val pos = LatLng(currentLat, currentLon)
+                map.cameraPosition = CameraPosition.Builder().target(pos).zoom(12.0).build()
+                markerInstance = map.addMarker(
+                    MarkerOptions().position(pos).title("Selected Location")
+                )
 
                 map.addOnMapClickListener { point ->
                     markerInstance?.position = point
@@ -114,10 +113,10 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
                 }
             }
         }
-        onDispose { }
+        onDispose {}
     }
 
-    // MapView lifecycle
+    // Lifecycle handling
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, mapView) {
         mapViewState = mapView
@@ -139,12 +138,11 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
         }
     }
 
-    // Function to handle suggestion click
+    // Suggestion click handler
     fun onSuggestionClick(
         placeId: Int,
         mapInstance: MapLibreMap?,
-        markerInstance: Marker?,
-        updateLatLon: (Double, Double) -> Unit
+        markerInstance: Marker?
     ) {
         scope.launch(Dispatchers.IO) {
             try {
@@ -157,9 +155,10 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
                 if (!body.isNullOrEmpty()) {
                     val json = JSONObject(body)
                     val data = json.getJSONArray("data").getJSONObject(0)
-                    val centroid = data.getJSONObject("centroid")
-                    val lat = centroid.getDouble("lat")
-                    val lon = centroid.getDouble("lon")
+                    val cent = data.getJSONObject("centroid")
+                    val lat = cent.getDouble("lat")
+                    val lon = cent.getDouble("lon")
+
                     val newPos = LatLng(lat, lon)
 
                     withContext(Dispatchers.Main) {
@@ -167,7 +166,11 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
                             org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(newPos, 14.0)
                         )
                         markerInstance?.position = newPos
-                        updateLatLon(lat, lon)
+
+                        currentLat = lat
+                        currentLon = lon
+                        inputLatText = lat.toString()
+                        inputLonText = lon.toString()
                     }
                 }
             } catch (e: Exception) {
@@ -178,26 +181,29 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
         }
     }
 
+    // UI
     Scaffold { paddingValues ->
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
 
-            // Search + Lat/Lon Input
-            Card(modifier = Modifier.fillMaxWidth().padding(8.dp), elevation = CardDefaults.cardElevation(4.dp)) {
+            // TOP CARD
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                colors = CardDefaults.cardColors(containerColor = White),
+                elevation = CardDefaults.cardElevation(4.dp)
+            ) {
                 Column(modifier = Modifier.padding(12.dp)) {
 
+                    // Search box
                     OutlinedTextField(
                         value = searchQuery,
                         onValueChange = {
                             searchQuery = it
-
-                            // Cancel previous debounce job
                             debounceJob?.cancel()
 
                             if (it.isNotEmpty()) {
-                                expanded = false  // Don't show dropdown until search is ready
-
+                                expanded = false
                                 debounceJob = scope.launch {
-                                    delay(500)  // delay in millisecond
+                                    delay(500)
 
                                     expanded = true
 
@@ -215,11 +221,10 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
                                                 val json = JSONObject(body)
                                                 val dataArray = json.getJSONArray("data")
 
-                                                val tempList = mutableListOf<SearchResult>()
-
+                                                val temp = mutableListOf<SearchResult>()
                                                 for (i in 0 until dataArray.length()) {
                                                     val obj = dataArray.getJSONObject(i)
-                                                    tempList.add(
+                                                    temp.add(
                                                         SearchResult(
                                                             placeId = obj.getInt("placeId"),
                                                             name = obj.getString("name"),
@@ -229,7 +234,7 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
                                                 }
 
                                                 withContext(Dispatchers.Main) {
-                                                    suggestions = tempList
+                                                    suggestions = temp
                                                 }
                                             }
                                         } catch (_: Exception) {}
@@ -242,15 +247,16 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
                         },
                         placeholder = { Text("Search location...") },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp)
+                            .background(TextBoxColor),
                         trailingIcon = {
-                            IconButton(onClick = { /* optional: trigger search */ }) {
-                                Icon(Icons.Default.Search, contentDescription = "Search")
-                            }
+                            Icon(Icons.Default.Search, contentDescription = "Search")
                         }
                     )
 
-                    // Dropdown
+                    // DROPDOWN
                     DropdownMenu(
                         expanded = expanded,
                         onDismissRequest = { expanded = false },
@@ -262,72 +268,61 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
                                 onClick = {
                                     expanded = false
                                     searchQuery = item.name
+
                                     onSuggestionClick(
                                         placeId = item.placeId,
                                         mapInstance = mapInstance,
                                         markerInstance = markerInstance
-                                    ) { lat, lon ->
-                                        currentLat = lat
-                                        currentLon = lon
-                                        inputLatText = lat.toString()
-                                        inputLonText = lon.toString()
-                                    }
+                                    )
                                 }
                             )
                         }
                     }
 
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(12.dp))
 
                     Text("Choose Location:", style = MaterialTheme.typography.titleMedium)
-                    Text("• Type latitude/longitude and press the button", fontSize = 16.sp)
+                    Text("• Search your location", fontSize = 16.sp)
                     Text("• OR tap anywhere on the map", fontSize = 16.sp)
-                    Spacer(Modifier.height(8.dp))
 
+                    Spacer(Modifier.height(12.dp))
+
+                    // BUTTON ROW
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        OutlinedTextField(
-                            value = inputLatText,
-                            onValueChange = { inputLatText = it },
-                            label = { Text("Latitude") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            modifier = Modifier.weight(1f).padding(end = 4.dp),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = inputLonText,
-                            onValueChange = { inputLonText = it },
-                            label = { Text("Longitude") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            modifier = Modifier.weight(1f).padding(start = 4.dp),
-                            singleLine = true
-                        )
-                    }
 
-                    Spacer(Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // GREEN BUTTON
                         Button(
                             onClick = {
                                 try {
                                     val lat = inputLatText.toDouble()
                                     val lon = inputLonText.toDouble()
-                                    val newPos = LatLng(lat, lon)
+                                    val pos = LatLng(lat, lon)
+
                                     mapInstance?.animateCamera(
-                                        org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(newPos, 12.0)
+                                        org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(pos, 12.0)
                                     )
-                                    markerInstance?.position = newPos
+
+                                    markerInstance?.position = pos
                                     currentLat = lat
                                     currentLon = lon
-                                } catch (e: NumberFormatException) {
+
+                                } catch (e: Exception) {
                                     Toast.makeText(context, "Invalid coordinates", Toast.LENGTH_SHORT).show()
                                 }
                             },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Center Map") }
+                            colors = ButtonDefaults.buttonColors(containerColor = Green),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f),
+                            contentPadding = PaddingValues(vertical = 14.dp)
+                        ) {
+                            Text("Center Map", color = Color.White)
+                        }
 
+                        // GRADIENT CONFIRM BUTTON
                         Button(
                             onClick = {
                                 Toast.makeText(
@@ -336,27 +331,43 @@ fun MapViewComposable(savedInstanceState: Bundle?) {
                                     Toast.LENGTH_SHORT
                                 ).show()
                             },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Confirm") }
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(
+                                    brush = Brush.horizontalGradient(ButtonColor),
+                                    shape = MaterialTheme.shapes.medium
+                                ),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = androidx.compose.ui.graphics.Color.Transparent
+                            )
+                        ) {
+                            Text("Confirm", color = White)
+                        }
                     }
                 }
             }
 
-            // Map
+            // MAP
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
             }
 
-            // Current location display
+            // BOTTOM CARD
             Card(
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                colors = CardDefaults.cardColors(containerColor = TextBoxColor),
                 elevation = CardDefaults.cardElevation(4.dp)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Selected Location (Click/Drag Marker):", style = MaterialTheme.typography.titleMedium)
-                    Text("Lat: ${String.format("%.6f", currentLat)}, Lon: ${String.format("%.6f", currentLon)}",
-                        style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 4.dp))
+                    Text(
+                        "Selected Location (Click/Drag Marker):",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        "Lat: ${String.format("%.6f", currentLat)}, Lon: ${String.format("%.6f", currentLon)}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
             }
         }
