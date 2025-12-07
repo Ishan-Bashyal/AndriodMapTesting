@@ -4,6 +4,6 @@ data class PlaceAPIResponseModel(
     val timestamp: String,
     val status: Int,
     val message: String,
-    val data: List<Place>
+    val data: List<PlaceModel>
 )
 

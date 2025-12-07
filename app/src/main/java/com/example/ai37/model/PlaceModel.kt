@@ -3,7 +3,7 @@ import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
-data class Place(
+data class PlaceModel(
     val license: String?,
     val score: Double?,
     var address: String,
